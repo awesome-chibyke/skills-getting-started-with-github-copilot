@@ -30,7 +30,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const spotsLeft = details.max_participants - details.participants.length;
 
-        // Build participants section (bulleted list) or a friendly empty-state
+        // Build participants section (rows with delete icon) or a friendly empty-state
         const participants = Array.isArray(details.participants)
           ? details.participants
           : [];
@@ -40,11 +40,18 @@ document.addEventListener("DOMContentLoaded", () => {
           participantsHTML = `
             <div class="participants">
               <h5 class="participants-title">Participants</h5>
-              <ul class="participants-list">
+              <div class="participants-list">
                 ${participants
-                  .map((p) => `<li>${escapeHtml(p)}</li>`)
+                  .map((p) => `
+                    <div class="participant-row">
+                      <span class="participant-name">${escapeHtml(p)}</span>
+                      <button class="delete-participant" title="Remove participant" data-activity="${escapeHtml(name)}" data-participant="${escapeHtml(p)}">
+                        &#128465;
+                      </button>
+                    </div>
+                  `)
                   .join("")}
-              </ul>
+              </div>
             </div>
           `;
         } else {
@@ -60,6 +67,38 @@ document.addEventListener("DOMContentLoaded", () => {
           <p><strong>Availability:</strong> ${spotsLeft} spots left</p>
           ${participantsHTML}
         `;
+
+        // Add event listeners for delete buttons after card is added to DOM
+        setTimeout(() => {
+          const deleteButtons = activityCard.querySelectorAll('.delete-participant');
+          deleteButtons.forEach((btn) => {
+            btn.addEventListener('click', async (e) => {
+              e.preventDefault();
+              const activityName = btn.getAttribute('data-activity');
+              const participant = btn.getAttribute('data-participant');
+              btn.disabled = true;
+              btn.innerHTML = '...';
+              try {
+                const response = await fetch(
+                  `/activities/${encodeURIComponent(activityName)}/unregister?email=${encodeURIComponent(participant)}`,
+                  { method: 'POST' }
+                );
+                if (response.ok) {
+                  // Refresh activities list to update UI
+                  fetchActivities();
+                } else {
+                  btn.innerHTML = '&#128465;';
+                  btn.disabled = false;
+                  alert('Failed to remove participant.');
+                }
+              } catch (error) {
+                btn.innerHTML = '&#128465;';
+                btn.disabled = false;
+                alert('Error removing participant.');
+              }
+            });
+          });
+        }, 0);
 
         activitiesList.appendChild(activityCard);
 
@@ -96,6 +135,8 @@ document.addEventListener("DOMContentLoaded", () => {
         messageDiv.textContent = result.message;
         messageDiv.className = "success";
         signupForm.reset();
+        // Refresh activities list to show new participant
+        fetchActivities();
       } else {
         messageDiv.textContent = result.detail || "An error occurred";
         messageDiv.className = "error";
